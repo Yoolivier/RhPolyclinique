@@ -1,25 +1,64 @@
 
 services:
-###> doctrine/doctrine-bundle ###
-  database:
-    image: postgres:${POSTGRES_VERSION:-16}-alpine
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rhpolyclinique
+    ports:
+      - "8082:80"
+    env_file:
+      - .env.local
+    depends_on:
+      mysql:
+        condition: service_healthy
+      mongodb:
+        condition: service_started
+
+  mysql:
+    image: mysql:8.0
+    container_name: rhpolyclinique-mysql
+    restart: unless-stopped
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-app}
-      # You should definitely change the password in production
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-!ChangeMe!}
-      POSTGRES_USER: ${POSTGRES_USER:-app}
-    healthcheck:
-      test: ["CMD", "pg_isready", "-d", "${POSTGRES_DB:-app}", "-U", "${POSTGRES_USER:-app}"]
-      timeout: 5s
-      retries: 5
-      start_period: 60s
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: rhpolyclinique
+      MYSQL_USER: rhpolyclinique
+      MYSQL_PASSWORD: rhpolyclinique
+    ports:
+      - "3307:3306"
     volumes:
-      - database_data:/var/lib/postgresql/data:rw
-      # You may use a bind-mounted host directory instead, so that it is harder to accidentally remove the volume and lose all your data!
-      # - ./docker/db/data:/var/lib/postgresql/data:rw
-###< doctrine/doctrine-bundle ###
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot"]
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  mongodb:
+    image: mongo:8
+    container_name: rhpolyclinique-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+
+  phpmyadmin:
+    image: phpmyadmin:latest
+    container_name: rhpolyclinique-phpmyadmin
+    restart: unless-stopped
+    environment:
+      PMA_HOST: mysql
+      PMA_PORT: 3306
+    ports:
+      - "8083:80"
+    depends_on:
+      mysql:
+        condition: service_healthy
 
 volumes:
-###> doctrine/doctrine-bundle ###
-  database_data:
-###< doctrine/doctrine-bundle ###
+
+  mysql_data:
+
+  mongodb_data:
